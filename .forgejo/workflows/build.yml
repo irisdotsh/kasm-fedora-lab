@@ -26,33 +26,32 @@ env:
   # Forgejo's built-in container registry (this instance's host)
   REGISTRY: git.irisblankenship.me
   TEST_TAG: kasm-fedora-lab:ci
-  # Build/run against the docker-in-docker service declared below. This is the
-  # DOCKER_HOST a container-based Forgejo runner expects; setting it explicitly
-  # keeps the job self-contained.
-  DOCKER_HOST: tcp://docker-in-docker:2375
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Provide a Docker daemon on the job network. The runner points DOCKER_HOST
-    # at a host named `docker-in-docker`, but nothing answers there unless the
-    # job declares it. Requires the runner to permit privileged service
-    # containers (dind needs it).
-    services:
-      docker-in-docker:
-        image: docker:dind
-        env:
-          DOCKER_TLS_CERTDIR: ""      # plain tcp on 2375, matching DOCKER_HOST
-        options: >-
-          --privileged
-          --health-cmd "docker info"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 30
-          --health-start-period 15s
     steps:
       # Resolved against the runner's default actions URL (code.forgejo.org).
       - uses: actions/checkout@v4
+
+      # This runner spawns jobs inside a dind sidecar and injects
+      # DOCKER_HOST=tcp://docker-in-docker:2375 -- but that name only resolves
+      # on the runner's own network, not inside the dind where this job runs.
+      # The dind daemon *is* reachable at this job's default-route gateway, so
+      # repoint DOCKER_HOST there (with a probe so the log confirms it).
+      - name: Point DOCKER_HOST at the dind daemon
+        shell: bash
+        run: |
+          echo "runner-injected DOCKER_HOST=${DOCKER_HOST:-<unset>}"
+          gw=$(ip -4 route show default | awk '{print $3; exit}')
+          if [ -z "$gw" ]; then echo "could not determine default gateway"; ip -4 route; exit 1; fi
+          echo "default gateway: $gw  ->  DOCKER_HOST=tcp://$gw:2375"
+          if (exec 3<>/dev/tcp/"$gw"/2375) 2>/dev/null; then
+            echo "ok: $gw:2375 is reachable"
+          else
+            echo "WARNING: $gw:2375 not reachable -- the daemon may be elsewhere"
+          fi
+          echo "DOCKER_HOST=tcp://$gw:2375" >> "$GITHUB_ENV"
 
       # docker/* actions aren't mirrored on code.forgejo.org, so pull them
       # straight from GitHub by full URL.
