@@ -68,7 +68,11 @@ jobs:
       # and the inner dockerd starts via the custom_startup hook.
       - name: Boot test (KasmVNC) + docker-in-docker test
         run: |
+          # -v /var/lib/docker: inner Docker's storage must not sit on the
+          # container's overlayfs (containerd snapshotter can't nest overlay).
+          # Mirrors the lab_dind volume in compose / sysbox's implicit mount.
           docker run -d --name lab --privileged \
+            -v /var/lib/docker \
             -e VNC_PW=citest -p 6901:6901 "$TEST_TAG"
 
           echo "waiting for KasmVNC..."
@@ -95,7 +99,7 @@ jobs:
             docker info >/dev/null || { cat /tmp/dockerd.log; exit 1; }
             docker run --rm hello-world
           '
-          docker rm -f lab
+          docker rm -fv lab
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
