@@ -17,15 +17,6 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
     curl -fsSL https://download.docker.com/linux/fedora/docker-ce.repo \
       -o /etc/yum.repos.d/docker-ce.repo
 
-# containerlab's repo isn't GPG-signed (per its install docs)
-COPY <<'EOF' /etc/yum.repos.d/netdevops.repo
-[netdevops]
-name=NetDevOps (containerlab)
-baseurl=https://netdevops.fury.site/yum/
-enabled=1
-gpgcheck=0
-EOF
-
 COPY <<'EOF' /etc/yum.repos.d/opentofu.repo
 [opentofu]
 name=OpenTofu
@@ -47,7 +38,7 @@ RUN dnf -y install \
       code \
       python3 python3-pip \
       ansible ansible-lint python3-paramiko python3-ansible-pylibssh \
-      containerlab tofu \
+      tofu \
       unzip xz jq \
       openssh-clients vim-enhanced curl wget git tmux \
       wireshark \
@@ -80,6 +71,21 @@ RUN for pkg in firefox gimp zoom slack sublime-text; do dnf -y remove "$pkg" || 
 RUN curl -fsSL -o /usr/local/bin/yq \
       https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && \
     chmod +x /usr/local/bin/yq
+
+# ---------------------------------------------------------------------------
+# containerlab -- RPM straight from GitHub releases. Its yum repo (Gemfury)
+# is too slow/rate-limited from CI: metadata at ~17 KiB/s and the 41MB RPM
+# times dnf out. Asset names embed the version, so resolve it from the
+# /releases/latest redirect first.
+# ---------------------------------------------------------------------------
+RUN ver=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+        https://github.com/srl-labs/containerlab/releases/latest) && \
+    ver="${ver##*/v}" && \
+    curl -fsSL -o /tmp/containerlab.rpm \
+      "https://github.com/srl-labs/containerlab/releases/download/v${ver}/containerlab_${ver}_linux_amd64.rpm" && \
+    dnf -y install /tmp/containerlab.rpm && \
+    rm /tmp/containerlab.rpm && \
+    dnf clean all
 
 # ---------------------------------------------------------------------------
 # Python network-automation stack in a venv (Fedora's system python is
