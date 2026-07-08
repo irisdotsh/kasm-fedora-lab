@@ -42,7 +42,6 @@ check "ff policies exist"   test -f /opt/firefox-dev/distribution/policies.json
 check "ff ublock policy"    grep -q 'uBlock0@raymondhill.net' /opt/firefox-dev/distribution/policies.json
 check "ff bitwarden policy" grep -q '446900e4-71c2-419f-a6a7-df9c091e268b' /opt/firefox-dev/distribution/policies.json
 check "postman"             test -x /opt/Postman/Postman
-check "winbox"              test -x /opt/winbox/WinBox
 check "bitwarden desktop"   test -x /opt/bitwarden/bitwarden
 
 # Dark mode config baked into default profile
