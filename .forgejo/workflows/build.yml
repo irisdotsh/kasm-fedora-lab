@@ -144,14 +144,14 @@ jobs:
         shell: bash
         env:
           REG_USER: ${{ github.actor }}
-          REG_PASS: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer a PAT with write:package scope, stored as the secret
+          # REGISTRY_TOKEN. Forgejo's automatic token authenticates but its push
+          # token comes back without package-write scope (the 401 on push), so
+          # the automatic-token fallback here is only a stopgap.
+          REG_PASS: ${{ secrets.REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          # Direct `docker login` so a real error surfaces if it fails.
-          # secrets.GITHUB_TOKEN IS Forgejo's automatic token; the FORGEJO_TOKEN
-          # alias only exists on runner v7+, and referencing an undefined secret
-          # kills the step with no logs (which is what happened before).
           echo "registry=$REGISTRY  user=${REG_USER:-<EMPTY>}  token=$([ -n "$REG_PASS" ] && echo set || echo EMPTY)"
-          if [ -z "$REG_PASS" ]; then echo "::error::secrets.GITHUB_TOKEN is empty"; exit 1; fi
+          if [ -z "$REG_PASS" ]; then echo "::error::no registry token (create a PAT and store it as secret REGISTRY_TOKEN)"; exit 1; fi
           echo "$REG_PASS" | docker login "$REGISTRY" -u "$REG_USER" --password-stdin
 
       - name: Image metadata
