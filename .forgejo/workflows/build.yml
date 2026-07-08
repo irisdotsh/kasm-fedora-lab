@@ -39,7 +39,7 @@ jobs:
       # on the runner's own network, not inside the dind where this job runs.
       # The dind daemon *is* reachable at this job's default-route gateway, so
       # repoint DOCKER_HOST there (with a probe so the log confirms it).
-      - name: Point DOCKER_HOST at the dind daemon
+      - name: Prepare Docker host and build flags
         shell: bash
         run: |
           echo "runner-injected DOCKER_HOST=${DOCKER_HOST:-<unset>}"
@@ -60,6 +60,16 @@ jobs:
           fi
           echo "DOCKER_HOST=tcp://$gw:2375" >> "$GITHUB_ENV"
 
+          # build-push-action's `no-cache` needs a literal true/false; on this
+          # runner a bare boolean expression can arrive as an empty string, so
+          # compute the flag here from the event name (always set as an env var).
+          event="${FORGEJO_EVENT_NAME:-$GITHUB_EVENT_NAME}"
+          case "$event" in
+            schedule|workflow_dispatch) echo "NO_CACHE=true"  >> "$GITHUB_ENV" ;;
+            *)                          echo "NO_CACHE=false" >> "$GITHUB_ENV" ;;
+          esac
+          echo "event=$event  ->  NO_CACHE flag written"
+
       # docker/* actions aren't mirrored on code.forgejo.org, so pull them
       # straight from GitHub by full URL.
       - uses: https://github.com/docker/setup-buildx-action@v3
@@ -75,7 +85,7 @@ jobs:
           pull: true
           # Scheduled/manual runs bust the cache so the "latest" download
           # layers (Firefox Dev, Postman, Bitwarden) actually re-fetch
-          no-cache: ${{ forgejo.event_name == 'schedule' || forgejo.event_name == 'workflow_dispatch' }}
+          no-cache: ${{ env.NO_CACHE }}
           tags: ${{ env.TEST_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
