@@ -36,6 +36,49 @@ check "docker group"        bash -c 'id -nG | grep -qw docker'
 check "wireshark group"     bash -c 'id -nG | grep -qw wireshark'
 check "custom_startup"      test -x /dockerstartup/custom_startup.sh
 
+# Network automation toolchain
+check "containerlab"         containerlab version
+check "sudoers containerlab" sudo -n /usr/bin/containerlab version
+check "opentofu"             tofu version
+check "jq"                   jq --version
+check "yq"                   yq --version
+check "tmux"                 tmux -V
+check "ansible-lint"         ansible-lint --version
+check "paramiko"             python3 -c 'import paramiko'
+check "ansible-pylibssh"     python3 -c 'import pylibsshext'
+check "netcommon collection" bash -c 'ansible-galaxy collection list 2>/dev/null | grep -q ansible.netcommon'
+check "routeros collection"  bash -c 'ansible-galaxy collection list 2>/dev/null | grep -q community.routeros'
+
+# Python network-automation venv
+check "venv netmiko"    /opt/netauto/bin/python -c 'import netmiko'
+check "venv napalm"     /opt/netauto/bin/python -c 'import napalm'
+check "venv nornir"     /opt/netauto/bin/python -c 'import nornir'
+check "venv scrapli"    /opt/netauto/bin/python -c 'import scrapli'
+check "venv pynetbox"   /opt/netauto/bin/python -c 'import pynetbox'
+check "venv pyang"      /opt/netauto/bin/pyang --version
+check "venv PATH hook"  grep -q '/opt/netauto/bin' /etc/profile.d/netauto.sh
+
+# Network CLI tools
+check "nmap"        nmap --version
+check "ncat"        ncat --version
+check "tcpdump"     tcpdump --version
+check "tshark"      tshark --version
+check "mtr"         mtr --version
+check "traceroute"  bash -c 'command -v traceroute'
+check "iperf3"      iperf3 --version
+check "socat"       socat -V
+check "dig"         dig -v
+check "whois"       bash -c 'command -v whois'
+check "fping"       fping -v
+check "snmpwalk"    snmpwalk -V
+check "ethtool"     ethtool --version
+check "ipcalc"      bash -c 'command -v ipcalc'
+check "telnet"      bash -c 'command -v telnet'
+check "minicom"     minicom --version
+check "wireguard"   wg --version
+check "openconnect" openconnect --version
+check "openvpn"     bash -c 'command -v openvpn'
+
 # GUI apps
 check "firefox dev"         /opt/firefox-dev/firefox --version
 check "ff policies exist"   test -f /opt/firefox-dev/distribution/policies.json
@@ -62,6 +105,14 @@ check "desktop wireshark"    test -x "$DESK/wireshark.desktop"
 check "desktop thunderbird"  test -x "$DESK/thunderbird.desktop"
 check "exactly 6 desktop icons" \
     bash -c '[ "$(ls -1 /home/kasm-default-profile/Desktop/*.desktop 2>/dev/null | wc -l)" -eq 6 ]'
+
+# Workspace polish baked into the default profile
+check "vscode ansible ext"  bash -c 'ls /home/kasm-default-profile/.vscode/extensions | grep -q redhat.ansible'
+check "vscode yaml ext"     bash -c 'ls /home/kasm-default-profile/.vscode/extensions | grep -q redhat.vscode-yaml'
+check "vscode python ext"   bash -c 'ls /home/kasm-default-profile/.vscode/extensions | grep -q ms-python.python'
+check "vscode jinja ext"    bash -c 'ls /home/kasm-default-profile/.vscode/extensions | grep -q samuelcolvin.jinjahtml'
+check "vscode tf ext"       bash -c 'ls /home/kasm-default-profile/.vscode/extensions | grep -q hashicorp.terraform'
+check "ssh config skeleton" test -f /home/kasm-default-profile/.ssh/config
 
 # Uninstalled apps really gone
 check "no sublime"   bash -c '! rpm -q sublime-text'

@@ -17,16 +17,43 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
     curl -fsSL https://download.docker.com/linux/fedora/docker-ce.repo \
       -o /etc/yum.repos.d/docker-ce.repo
 
+# containerlab's repo isn't GPG-signed (per its install docs)
+COPY <<'EOF' /etc/yum.repos.d/netdevops.repo
+[netdevops]
+name=NetDevOps (containerlab)
+baseurl=https://netdevops.fury.site/yum/
+enabled=1
+gpgcheck=0
+EOF
+
+COPY <<'EOF' /etc/yum.repos.d/opentofu.repo
+[opentofu]
+name=OpenTofu
+baseurl=https://packages.opentofu.org/opentofu/tofu/rpm_any/rpm_any/$basearch
+repo_gpgcheck=0
+gpgcheck=1
+enabled=1
+gpgkey=https://get.opentofu.org/opentofu.gpg
+       https://packages.opentofu.org/opentofu/tofu/gpgkey
+EOF
+
 # ---------------------------------------------------------------------------
 # Packages
 # ---------------------------------------------------------------------------
+# Fedora's `ansible` is the community bundle -- network collections
+# (ansible.netcommon, community.routeros, cisco.ios, ...) ship inside it;
+# paramiko/pylibssh below are the connection libs network_cli needs.
 RUN dnf -y install \
       code \
       python3 python3-pip \
-      ansible \
-      unzip xz \
-      openssh-clients vim-enhanced curl wget git \
+      ansible ansible-lint python3-paramiko python3-ansible-pylibssh \
+      containerlab tofu \
+      unzip xz jq \
+      openssh-clients vim-enhanced curl wget git tmux \
       wireshark \
+      nmap nmap-ncat tcpdump mtr traceroute iperf3 socat \
+      bind-utils whois fping net-snmp-utils ethtool ipcalc telnet minicom \
+      wireguard-tools openconnect openvpn \
       xfce4-terminal \
       greybird-dark-theme greybird-xfwm4-theme \
       sudo procps-ng iptables-nft fuse-overlayfs \
@@ -45,6 +72,30 @@ RUN for pkg in firefox gimp zoom slack sublime-text; do dnf -y remove "$pkg" || 
     rm -f /etc/yum.repos.d/sublime-text.repo && \
     rm -rf /opt/Telegram /usr/share/applications/telegram.desktop && \
     dnf clean all
+
+# ---------------------------------------------------------------------------
+# yq (mikefarah/Go version -- Fedora's yq is the incompatible jq-wrapper).
+# amd64-only, like the other /opt downloads in this image.
+# ---------------------------------------------------------------------------
+RUN curl -fsSL -o /usr/local/bin/yq \
+      https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && \
+    chmod +x /usr/local/bin/yq
+
+# ---------------------------------------------------------------------------
+# Python network-automation stack in a venv (Fedora's system python is
+# PEP 668-managed, so no system-wide pip installs). PATH hook appends the
+# venv bin dir so the system python/pip stay first.
+# ---------------------------------------------------------------------------
+RUN python3 -m venv /opt/netauto && \
+    /opt/netauto/bin/pip install --no-cache-dir \
+      netmiko napalm nornir nornir-netmiko nornir-napalm nornir-utils \
+      scrapli pynetbox ciscoconfparse2 ttp textfsm pyang rich
+
+COPY <<'EOF' /etc/profile.d/netauto.sh
+# Network-automation venv CLIs (napalm, nornir, pyang, ...).
+# Appended, not prepended: the system python/pip must stay first on PATH.
+export PATH="$PATH:/opt/netauto/bin"
+EOF
 
 # ---------------------------------------------------------------------------
 # Firefox Developer Edition -> /opt/firefox-dev
@@ -130,9 +181,11 @@ EOF
 # Docker-in-Docker: kasm-user may start dockerd via sudo; CLI access via
 # docker group. Daemon launched by Kasm's custom_startup hook at session start.
 # Requires the container to run with --privileged.
+# containerlab also needs root (netns wiring), so allow it too -- both the
+# full name and the `clab` symlink its package ships.
 # ---------------------------------------------------------------------------
 RUN usermod -aG docker,wireshark kasm-user && \
-    echo 'kasm-user ALL=(ALL) NOPASSWD: /usr/bin/dockerd' > /etc/sudoers.d/dockerd && \
+    echo 'kasm-user ALL=(ALL) NOPASSWD: /usr/bin/dockerd, /usr/bin/containerlab, /usr/bin/clab' > /etc/sudoers.d/dockerd && \
     chmod 0440 /etc/sudoers.d/dockerd
 
 # Fedora's stock sudo PAM stack includes system-auth (pam_sss), which fails
@@ -183,9 +236,41 @@ EOF
 COPY <<'EOF' /home/kasm-default-profile/.config/Code/User/settings.json
 {
   "workbench.colorTheme": "Default Dark Modern",
-  "telemetry.telemetryLevel": "off"
+  "telemetry.telemetryLevel": "off",
+  "python.defaultInterpreterPath": "/opt/netauto/bin/python"
 }
 EOF
+
+# ---------------------------------------------------------------------------
+# VS Code extensions baked into the default profile (ansible, yaml, python,
+# jinja, terraform/tofu). --no-sandbox/--user-data-dir let the CLI run as root.
+# ---------------------------------------------------------------------------
+RUN HOME=/home/kasm-default-profile \
+    code --no-sandbox \
+         --user-data-dir /home/kasm-default-profile/.config/Code \
+         --extensions-dir /home/kasm-default-profile/.vscode/extensions \
+         --install-extension redhat.ansible \
+         --install-extension redhat.vscode-yaml \
+         --install-extension ms-python.python \
+         --install-extension samuelcolvin.jinjahtml \
+         --install-extension hashicorp.terraform
+
+# ---------------------------------------------------------------------------
+# SSH client defaults for lab gear: keepalives, TOFU host keys, and
+# commented-out legacy-crypto knobs to uncomment per-host as needed.
+# ---------------------------------------------------------------------------
+COPY <<'EOF' /home/kasm-default-profile/.ssh/config
+Host *
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    StrictHostKeyChecking accept-new
+    # Old network gear often needs legacy crypto -- enable per-host:
+    # KexAlgorithms +diffie-hellman-group14-sha1
+    # HostKeyAlgorithms +ssh-rsa
+    # PubkeyAcceptedAlgorithms +ssh-rsa
+EOF
+RUN chmod 700 /home/kasm-default-profile/.ssh && \
+    chmod 600 /home/kasm-default-profile/.ssh/config
 
 # ---------------------------------------------------------------------------
 # Desktop icons: exactly the six we want. The base image drops one .desktop

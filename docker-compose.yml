@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     runtime: sysbox-runc        # host needs sysbox-ce installed
     shm_size: 2g
+    dns:
+      - 10.0.10.5             # private DNS -- resolves git.irisblankenship.me etc.
     environment:
       - VNC_PW=changeme
     ports:
