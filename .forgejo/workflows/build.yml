@@ -165,12 +165,24 @@ jobs:
             type=raw,value={{date 'YYYYMMDD'}}
             type=sha
 
+      # Push via the dind daemon, not buildx: the daemon resolves
+      # git.irisblankenship.me through the runner's DNS (10.0.10.5), whereas the
+      # buildkit builder container only gets 8.8.8.8 and can't see the private
+      # domain. The image was already built and loaded as $TEST_TAG above.
       - name: Push to Forgejo container registry
         if: github.event_name != 'pull_request'
-        uses: https://github.com/docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
+        shell: bash
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          pushed=0
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "== $tag =="
+            docker tag "$TEST_TAG" "$tag"
+            docker push "$tag"
+            pushed=$((pushed + 1))
+          done <<< "$TAGS"
+          echo "pushed $pushed tag(s)"
+          [ "$pushed" -gt 0 ] || { echo "::error::metadata produced no tags to push"; exit 1; }
