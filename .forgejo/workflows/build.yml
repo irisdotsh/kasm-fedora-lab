@@ -140,39 +140,33 @@ jobs:
           docker rm -fv lab
 
       - name: Log in to Forgejo container registry
-        if: forgejo.event_name != 'pull_request'
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
-          REG_USER: ${{ forgejo.actor }}
-          REG_USER_ALT: ${{ github.actor }}
-          REG_PASS: ${{ secrets.FORGEJO_TOKEN }}
-          REG_PASS_ALT: ${{ secrets.GITHUB_TOKEN }}
+          REG_USER: ${{ github.actor }}
+          REG_PASS: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Direct `docker login` instead of docker/login-action so the real
-          # error is visible. FORGEJO_TOKEN / forgejo.actor need runner v7+;
-          # fall back to the GITHUB_* compatibility aliases otherwise.
-          user="${REG_USER:-$REG_USER_ALT}"
-          pass="${REG_PASS:-$REG_PASS_ALT}"
-          echo "registry=$REGISTRY user=${user:-<EMPTY>}" \
-               "FORGEJO_TOKEN=$([ -n "$REG_PASS" ] && echo set || echo empty)" \
-               "GITHUB_TOKEN=$([ -n "$REG_PASS_ALT" ] && echo set || echo empty)"
-          if [ -z "$pass" ]; then echo "::error::no token in secrets.FORGEJO_TOKEN / GITHUB_TOKEN"; exit 1; fi
-          if [ -z "$user" ]; then echo "::error::no username from forgejo.actor / github.actor"; exit 1; fi
-          echo "$pass" | docker login "$REGISTRY" -u "$user" --password-stdin
+          # Direct `docker login` so a real error surfaces if it fails.
+          # secrets.GITHUB_TOKEN IS Forgejo's automatic token; the FORGEJO_TOKEN
+          # alias only exists on runner v7+, and referencing an undefined secret
+          # kills the step with no logs (which is what happened before).
+          echo "registry=$REGISTRY  user=${REG_USER:-<EMPTY>}  token=$([ -n "$REG_PASS" ] && echo set || echo EMPTY)"
+          if [ -z "$REG_PASS" ]; then echo "::error::secrets.GITHUB_TOKEN is empty"; exit 1; fi
+          echo "$REG_PASS" | docker login "$REGISTRY" -u "$REG_USER" --password-stdin
 
       - name: Image metadata
-        if: forgejo.event_name != 'pull_request'
+        if: github.event_name != 'pull_request'
         id: meta
         uses: https://github.com/docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ forgejo.repository_owner }}/kasm-fedora-lab
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/kasm-fedora-lab
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value={{date 'YYYYMMDD'}}
             type=sha
 
       - name: Push to Forgejo container registry
-        if: forgejo.event_name != 'pull_request'
+        if: github.event_name != 'pull_request'
         uses: https://github.com/docker/build-push-action@v6
         with:
           context: .
