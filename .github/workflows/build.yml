@@ -37,13 +37,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: Dockerfile
-          failure-threshold: error
-
       - uses: docker/setup-buildx-action@v3
+
+      - name: Lint Dockerfile (BuildKit build checks)
+        run: docker buildx build --check .
 
       - name: Build image (local, for testing)
         uses: docker/build-push-action@v6
