@@ -54,7 +54,7 @@ jobs:
           pull: true
           # Scheduled/manual runs bust the cache so the "latest" download
           # layers (Firefox Dev, Postman, Bitwarden) actually re-fetch
-          no-cache: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+          no-cache: ${{ forgejo.event_name == 'schedule' || forgejo.event_name == 'workflow_dispatch' }}
           tags: ${{ env.TEST_TAG }}
           build-args: |
             WINBOX_VERSION=${{ inputs.winbox_version || '4.1' }}
@@ -106,26 +106,26 @@ jobs:
           docker rm -fv lab
 
       - name: Log in to Forgejo container registry
-        if: github.event_name != 'pull_request'
+        if: forgejo.event_name != 'pull_request'
         uses: https://github.com/docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ forgejo.actor }}
+          password: ${{ secrets.FORGEJO_TOKEN }}
 
       - name: Image metadata
-        if: github.event_name != 'pull_request'
+        if: forgejo.event_name != 'pull_request'
         id: meta
         uses: https://github.com/docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/kasm-fedora-lab
+          images: ${{ env.REGISTRY }}/${{ forgejo.repository_owner }}/kasm-fedora-lab
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value={{date 'YYYYMMDD'}}
             type=sha
 
       - name: Push to Forgejo container registry
-        if: github.event_name != 'pull_request'
+        if: forgejo.event_name != 'pull_request'
         uses: https://github.com/docker/build-push-action@v6
         with:
           context: .

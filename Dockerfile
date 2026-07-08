@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM kasmweb/fedora-43-desktop:1.19.0-rolling-daily
 
-LABEL org.opencontainers.image.source=https://github.com/irisdotsh/kasm-fedora-lab
+LABEL org.opencontainers.image.source=https://git.irisblankenship.me/iris/kasm-fedora-lab
 
 USER root
 ENV HOME=/home/kasm-default-profile
