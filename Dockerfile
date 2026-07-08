@@ -8,9 +8,6 @@ ENV HOME=/home/kasm-default-profile
 ENV STARTUPDIR=/dockerstartup
 WORKDIR $HOME
 
-# Check https://mikrotik.com/download/winbox for current version
-ARG WINBOX_VERSION=4.1
-
 # ---------------------------------------------------------------------------
 # Repos: VS Code (Microsoft) + Docker CE
 # ---------------------------------------------------------------------------
@@ -19,6 +16,11 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
       > /etc/yum.repos.d/vscode.repo && \
     curl -fsSL https://download.docker.com/linux/fedora/docker-ce.repo \
       -o /etc/yum.repos.d/docker-ce.repo
+
+# ---------------------------------------------------------------------------
+# Hostname
+# ---------------------------------------------------------------------------
+RUN hostname kasm-fedora-lab
 
 # ---------------------------------------------------------------------------
 # Packages
@@ -91,26 +93,6 @@ Exec=/opt/Postman/Postman
 Icon=/opt/Postman/app/icons/icon_128x128.png
 Terminal=false
 Categories=Development;
-EOF
-
-# ---------------------------------------------------------------------------
-# WinBox 4 (native Linux) -> /opt/winbox
-# ---------------------------------------------------------------------------
-RUN curl -fsSL "https://download.mikrotik.com/routeros/winbox/${WINBOX_VERSION}/WinBox_Linux.zip" \
-      -o /tmp/winbox.zip && \
-    mkdir -p /opt/winbox && \
-    unzip -q /tmp/winbox.zip -d /opt/winbox && \
-    chmod +x /opt/winbox/WinBox && \
-    rm /tmp/winbox.zip
-
-COPY <<'EOF' /usr/share/applications/winbox4.desktop
-[Desktop Entry]
-Type=Application
-Name=WinBox 4
-Exec=/opt/winbox/WinBox
-Icon=/opt/winbox/assets/img/winbox.png
-Terminal=false
-Categories=Network;
 EOF
 
 # ---------------------------------------------------------------------------
