@@ -26,10 +26,30 @@ env:
   # Forgejo's built-in container registry (this instance's host)
   REGISTRY: git.irisblankenship.me
   TEST_TAG: kasm-fedora-lab:ci
+  # Build/run against the docker-in-docker service declared below. This is the
+  # DOCKER_HOST a container-based Forgejo runner expects; setting it explicitly
+  # keeps the job self-contained.
+  DOCKER_HOST: tcp://docker-in-docker:2375
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Provide a Docker daemon on the job network. The runner points DOCKER_HOST
+    # at a host named `docker-in-docker`, but nothing answers there unless the
+    # job declares it. Requires the runner to permit privileged service
+    # containers (dind needs it).
+    services:
+      docker-in-docker:
+        image: docker:dind
+        env:
+          DOCKER_TLS_CERTDIR: ""      # plain tcp on 2375, matching DOCKER_HOST
+        options: >-
+          --privileged
+          --health-cmd "docker info"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+          --health-start-period 15s
     steps:
       # Resolved against the runner's default actions URL (code.forgejo.org).
       - uses: actions/checkout@v4
@@ -54,15 +74,20 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Smoke test (binaries, policies, groups, dark mode)
+      # Remote dind can't see the runner's filesystem, so copy the tests into a
+      # container with `docker cp` instead of bind-mounting them.
+      - name: Smoke test (binaries, policies, groups, theme)
         run: |
-          docker run --rm --entrypoint bash \
-            -v "$PWD/tests:/tests:ro" \
-            "$TEST_TAG" /tests/smoke.sh
+          cid=$(docker run -d --entrypoint sleep "$TEST_TAG" 600)
+          docker cp tests/. "$cid:/tests"
+          docker exec "$cid" bash /tests/smoke.sh; rc=$?
+          docker rm -f "$cid" >/dev/null
+          exit $rc
 
-      # The Actions runner doesn't have sysbox, so --privileged stands in
-      # for sysbox-runc here. Validates the same things: KasmVNC comes up
-      # and the inner dockerd starts via the custom_startup hook.
+      # The Actions runner doesn't have sysbox, so --privileged stands in for
+      # sysbox-runc here. KasmVNC is health-checked from *inside* the container
+      # (curl localhost) because with remote dind the published port isn't
+      # reachable on the job's own localhost.
       - name: Boot test (KasmVNC) + docker-in-docker test
         run: |
           # -v /var/lib/docker: inner Docker's storage must not sit on the
@@ -70,12 +95,12 @@ jobs:
           # Mirrors the lab_dind volume in compose / sysbox's implicit mount.
           docker run -d --name lab --privileged \
             -v /var/lib/docker \
-            -e VNC_PW=citest -p 6901:6901 "$TEST_TAG"
+            -e VNC_PW=citest "$TEST_TAG"
 
           echo "waiting for KasmVNC..."
           ok=0
           for i in $(seq 1 45); do
-            if curl -skf -u kasm_user:citest https://localhost:6901/ >/dev/null; then
+            if docker exec lab curl -skf -u kasm_user:citest https://localhost:6901/ >/dev/null 2>&1; then
               ok=1; break
             fi
             sleep 2
