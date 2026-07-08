@@ -141,11 +141,24 @@ jobs:
 
       - name: Log in to Forgejo container registry
         if: forgejo.event_name != 'pull_request'
-        uses: https://github.com/docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ forgejo.actor }}
-          password: ${{ secrets.FORGEJO_TOKEN }}
+        shell: bash
+        env:
+          REG_USER: ${{ forgejo.actor }}
+          REG_USER_ALT: ${{ github.actor }}
+          REG_PASS: ${{ secrets.FORGEJO_TOKEN }}
+          REG_PASS_ALT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Direct `docker login` instead of docker/login-action so the real
+          # error is visible. FORGEJO_TOKEN / forgejo.actor need runner v7+;
+          # fall back to the GITHUB_* compatibility aliases otherwise.
+          user="${REG_USER:-$REG_USER_ALT}"
+          pass="${REG_PASS:-$REG_PASS_ALT}"
+          echo "registry=$REGISTRY user=${user:-<EMPTY>}" \
+               "FORGEJO_TOKEN=$([ -n "$REG_PASS" ] && echo set || echo empty)" \
+               "GITHUB_TOKEN=$([ -n "$REG_PASS_ALT" ] && echo set || echo empty)"
+          if [ -z "$pass" ]; then echo "::error::no token in secrets.FORGEJO_TOKEN / GITHUB_TOKEN"; exit 1; fi
+          if [ -z "$user" ]; then echo "::error::no username from forgejo.actor / github.actor"; exit 1; fi
+          echo "$pass" | docker login "$REGISTRY" -u "$user" --password-stdin
 
       - name: Image metadata
         if: forgejo.event_name != 'pull_request'
