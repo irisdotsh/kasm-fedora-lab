@@ -1,7 +1,7 @@
 services:
   fedora-lab:
     build: .
-    image: ghcr.io/irisdotsh/kasm-fedora-lab:latest
+    image: git.irisblankenship.me/iris/kasm-fedora-lab:latest
     container_name: kasm-fedora-lab
     restart: unless-stopped
     runtime: sysbox-runc        # host needs sysbox-ce installed
