@@ -3,6 +3,7 @@ services:
     build: .
     image: git.irisblankenship.me/iris/kasm-fedora-lab:latest
     container_name: kasm-fedora-lab
+    hostname: kasm-fedora-lab   # runtime sets the hostname, not the Dockerfile
     restart: unless-stopped
     runtime: sysbox-runc        # host needs sysbox-ce installed
     shm_size: 2g

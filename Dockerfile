@@ -27,10 +27,23 @@ RUN dnf -y install \
       unzip xz \
       openssh-clients vim-enhanced curl wget git \
       wireshark \
+      xfce4-terminal \
+      greybird-dark-theme greybird-xfwm4-theme \
       sudo procps-ng iptables-nft fuse-overlayfs \
       docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
       libxkbcommon-x11 xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil xcb-util-cursor \
       libXScrnSaver xdg-utils && \
+    dnf clean all
+
+# ---------------------------------------------------------------------------
+# Remove base-image apps we don't want (their desktop icons are rebuilt at the
+# end of this file). Telegram is a /opt tarball; the rest are packages, and
+# Sublime also leaves a repo file behind. `|| true` so a future base image that
+# drops one of these doesn't break the build.
+# ---------------------------------------------------------------------------
+RUN for pkg in firefox gimp zoom slack sublime-text; do dnf -y remove "$pkg" || true; done && \
+    rm -f /etc/yum.repos.d/sublime-text.repo && \
+    rm -rf /opt/Telegram /usr/share/applications/telegram.desktop && \
     dnf clean all
 
 # ---------------------------------------------------------------------------
@@ -145,14 +158,24 @@ EOF
 RUN chmod +x /dockerstartup/custom_startup.sh
 
 # ---------------------------------------------------------------------------
-# Dark mode: XFCE GTK theme + VS Code (Firefox Dev Edition is dark by default)
+# Theme: Greybird-dark GTK theme + matching Greybird-dark xfwm4 window
+# decorations. VS Code dark below; Firefox Dev Edition is dark by default.
 # ---------------------------------------------------------------------------
 COPY <<'EOF' /home/kasm-default-profile/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xsettings" version="1.0">
   <property name="Net" type="empty">
-    <property name="ThemeName" type="string" value="Adwaita-dark"/>
+    <property name="ThemeName" type="string" value="Greybird-dark"/>
     <property name="IconThemeName" type="string" value="Adwaita"/>
+  </property>
+</channel>
+EOF
+
+COPY <<'EOF' /home/kasm-default-profile/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="theme" type="string" value="Greybird-dark"/>
   </property>
 </channel>
 EOF
@@ -163,6 +186,21 @@ COPY <<'EOF' /home/kasm-default-profile/.config/Code/User/settings.json
   "telemetry.telemetryLevel": "off"
 }
 EOF
+
+# ---------------------------------------------------------------------------
+# Desktop icons: exactly the six we want. The base image drops one .desktop
+# per app into ~/Desktop; wipe it and lay down only these, +x so XFCE treats
+# them as trusted launchers.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /home/kasm-default-profile/Desktop && \
+    rm -f /home/kasm-default-profile/Desktop/*.desktop && \
+    cp /usr/share/applications/firefox-dev.desktop                 /home/kasm-default-profile/Desktop/firefox-dev.desktop && \
+    cp /usr/share/applications/code.desktop                        /home/kasm-default-profile/Desktop/code.desktop && \
+    cp /usr/share/applications/xfce4-terminal.desktop              /home/kasm-default-profile/Desktop/xfce4-terminal.desktop && \
+    cp /usr/share/applications/postman.desktop                     /home/kasm-default-profile/Desktop/postman.desktop && \
+    cp /usr/share/applications/net.thunderbird.Thunderbird.desktop /home/kasm-default-profile/Desktop/thunderbird.desktop && \
+    find /usr/share/applications -iname '*wireshark*.desktop' -exec cp {} /home/kasm-default-profile/Desktop/wireshark.desktop \; && \
+    chmod +x /home/kasm-default-profile/Desktop/*.desktop
 
 # ---------------------------------------------------------------------------
 # Finalize: fix default-profile ownership, drop back to kasm-user
