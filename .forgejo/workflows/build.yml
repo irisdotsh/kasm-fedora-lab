@@ -43,8 +43,15 @@ jobs:
         shell: bash
         run: |
           echo "runner-injected DOCKER_HOST=${DOCKER_HOST:-<unset>}"
-          gw=$(ip -4 route show default | awk '{print $3; exit}')
-          if [ -z "$gw" ]; then echo "could not determine default gateway"; ip -4 route; exit 1; fi
+          # Read the default gateway straight from /proc/net/route -- this image
+          # has neither `ip` nor a guaranteed `awk`. The gateway is field 3
+          # (little-endian hex) of the row whose destination (field 2) is 0.
+          gw_hex=""
+          while read -r _iface dest gw_col _rest; do
+            [ "$dest" = "00000000" ] && { gw_hex="$gw_col"; break; }
+          done < /proc/net/route
+          if [ -z "$gw_hex" ]; then echo "no default route found"; cat /proc/net/route; exit 1; fi
+          gw="$((16#${gw_hex:6:2})).$((16#${gw_hex:4:2})).$((16#${gw_hex:2:2})).$((16#${gw_hex:0:2}))"
           echo "default gateway: $gw  ->  DOCKER_HOST=tcp://$gw:2375"
           if (exec 3<>/dev/tcp/"$gw"/2375) 2>/dev/null; then
             echo "ok: $gw:2375 is reachable"
