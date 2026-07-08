@@ -24,6 +24,7 @@ check "vim"                 vim --version
 check "curl"                curl --version
 check "wget"                wget --version
 check "git"                 git --version
+check "ansible"             ansible --version
 check "wireshark"           wireshark --version
 
 # Docker-in-Docker plumbing

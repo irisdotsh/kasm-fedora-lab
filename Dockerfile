@@ -26,6 +26,7 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
 RUN dnf -y install \
       code \
       python3 python3-pip \
+      ansible \
       unzip xz \
       openssh-clients vim-enhanced curl wget git \
       wireshark \
@@ -143,6 +144,19 @@ EOF
 RUN usermod -aG docker,wireshark kasm-user && \
     echo 'kasm-user ALL=(ALL) NOPASSWD: /usr/bin/dockerd' > /etc/sudoers.d/dockerd && \
     chmod 0440 /etc/sudoers.d/dockerd
+
+# Fedora's stock sudo PAM stack includes system-auth (pam_sss), which fails
+# its account phase inside a container with no sssd daemon running:
+#   "PAM account management error: Authentication service cannot retrieve
+#    authentication info"
+# Authorization is enforced by the sudoers rule above; make PAM a no-op here.
+COPY <<'EOF' /etc/pam.d/sudo
+auth       sufficient   pam_permit.so
+account    sufficient   pam_permit.so
+password   required     pam_deny.so
+session    optional     pam_keyinit.so revoke
+session    required     pam_limits.so
+EOF
 
 COPY <<'EOF' /dockerstartup/custom_startup.sh
 #!/usr/bin/env bash
