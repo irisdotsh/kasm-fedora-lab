@@ -1,0 +1,19 @@
+services:
+  fedora-lab:
+    build: .
+    image: ghcr.io/irisdotsh/kasm-fedora-lab:latest
+    container_name: kasm-fedora-lab
+    restart: unless-stopped
+    runtime: sysbox-runc        # host needs sysbox-ce installed
+    shm_size: 2g
+    environment:
+      - VNC_PW=changeme
+    ports:
+      - "6905:6901"
+    volumes:
+      - lab_home:/home/kasm-user
+      - lab_dind:/var/lib/docker   # sysbox requires this volume be exclusive to one container
+
+volumes:
+  lab_home:
+  lab_dind:
