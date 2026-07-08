@@ -17,11 +17,6 @@ on:
     # Firefox Dev / Postman / Bitwarden (their download URLs are always-latest)
     - cron: "0 6 * * 1"
   workflow_dispatch:
-    inputs:
-      winbox_version:
-        description: "WinBox version to bake in"
-        required: false
-        default: "4.1"
 
 permissions:
   contents: read
@@ -56,8 +51,6 @@ jobs:
           # layers (Firefox Dev, Postman, Bitwarden) actually re-fetch
           no-cache: ${{ forgejo.event_name == 'schedule' || forgejo.event_name == 'workflow_dispatch' }}
           tags: ${{ env.TEST_TAG }}
-          build-args: |
-            WINBOX_VERSION=${{ inputs.winbox_version || '4.1' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -132,6 +125,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            WINBOX_VERSION=${{ inputs.winbox_version || '4.1' }}
           cache-from: type=gha
