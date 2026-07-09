@@ -21,6 +21,22 @@ services:
                                    # container's overlayfs (can't nest overlay)
       - lab_twingate:/etc/twingate # twingate auth/config survives redeploys
 
+  # Cloudflare tunnel connector. Create a remotely-managed tunnel in the
+  # Zero Trust dashboard (Networks -> Tunnels), put its token in .env as
+  # TUNNEL_TOKEN, and add a public hostname pointing at the workspace:
+  #   service: https://fedora-lab:6901, TLS -> No TLS Verify on
+  # (KasmVNC's cert is self-signed; cloudflared reaches it over the compose
+  # network by service name, so no extra published ports are needed.)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: kasm-fedora-lab-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env (Zero Trust -> Networks -> Tunnels)}
+    depends_on:
+      - fedora-lab
+
 volumes:
   lab_home:
   lab_dind:
