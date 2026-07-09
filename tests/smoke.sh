@@ -106,6 +106,15 @@ check "desktop thunderbird"  test -x "$DESK/thunderbird.desktop"
 check "exactly 6 desktop icons" \
     bash -c '[ "$(ls -1 /home/kasm-default-profile/Desktop/*.desktop 2>/dev/null | wc -l)" -eq 6 ]'
 
+# Launchers with an absolute Icon= path must point at a file that exists
+# (app tarballs move their icons between releases -- Postman has already)
+for f in "$DESK"/*.desktop; do
+    icon=$(grep -m1 '^Icon=' "$f" | cut -d= -f2-)
+    case "$icon" in
+        /*) check "icon exists: $(basename "$f" .desktop)" test -f "$icon" ;;
+    esac
+done
+
 # Workspace polish baked into the default profile
 check "vscode ansible ext"  bash -c 'ls /home/kasm-default-profile/.vscode/extensions | grep -q redhat.ansible'
 check "vscode yaml ext"     bash -c 'ls /home/kasm-default-profile/.vscode/extensions | grep -q redhat.vscode-yaml'

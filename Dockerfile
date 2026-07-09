@@ -146,16 +146,23 @@ EOF
 # ---------------------------------------------------------------------------
 # Postman -> /opt/Postman
 # ---------------------------------------------------------------------------
+# The icon's location inside the tarball moves between releases (currently
+# app/resources/app/assets/icon.png, formerly app/icons/icon_128x128.png),
+# so find it and copy to a stable path the launcher can rely on. `test -n`
+# fails the build loudly if a future layout hides it somewhere new.
 RUN curl -fsSL https://dl.pstmn.io/download/latest/linux_64 -o /tmp/postman.tar.gz && \
     tar -xzf /tmp/postman.tar.gz -C /opt && \
-    rm /tmp/postman.tar.gz
+    rm /tmp/postman.tar.gz && \
+    icon=$(find /opt/Postman -type f \( -name 'icon.png' -o -name 'icon_128x128.png' \) | head -1) && \
+    test -n "$icon" && \
+    cp "$icon" /opt/Postman/postman-icon.png
 
 COPY <<'EOF' /usr/share/applications/postman.desktop
 [Desktop Entry]
 Type=Application
 Name=Postman
 Exec=/opt/Postman/Postman
-Icon=/opt/Postman/app/icons/icon_128x128.png
+Icon=/opt/Postman/postman-icon.png
 Terminal=false
 Categories=Development;
 EOF
