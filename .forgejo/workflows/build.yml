@@ -100,15 +100,15 @@ jobs:
           docker rm -f "$cid" >/dev/null
           exit $rc
 
-      # The Actions runner doesn't have sysbox, so --privileged stands in for
-      # sysbox-runc here. KasmVNC is health-checked from *inside* the container
-      # (curl localhost) because with remote dind the published port isn't
-      # reachable on the job's own localhost.
+      # Same privileged docker-in-docker mode the compose deployment uses.
+      # KasmVNC is health-checked from *inside* the container (curl localhost)
+      # because with remote dind the published port isn't reachable on the
+      # job's own localhost.
       - name: Boot test (KasmVNC) + docker-in-docker test
         run: |
           # -v /var/lib/docker: inner Docker's storage must not sit on the
           # container's overlayfs (containerd snapshotter can't nest overlay).
-          # Mirrors the lab_dind volume in compose / sysbox's implicit mount.
+          # Mirrors the lab_dind volume in compose.
           docker run -d --name lab --privileged \
             -v /var/lib/docker \
             -e VNC_PW=citest "$TEST_TAG"

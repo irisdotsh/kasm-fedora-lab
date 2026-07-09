@@ -5,7 +5,9 @@ services:
     container_name: kasm-fedora-lab
     hostname: kasm-fedora-lab   # runtime sets the hostname, not the Dockerfile
     restart: unless-stopped
-    runtime: sysbox-runc        # host needs sysbox-ce installed
+    privileged: true            # inner dockerd needs it (was sysbox-runc, which
+                                # gave unprivileged dind but required sysbox-ce
+                                # on a Linux host)
     shm_size: 2g
     dns:
       - 10.0.10.5             # private DNS -- resolves git.irisblankenship.me etc.
@@ -15,7 +17,8 @@ services:
       - "6905:6901"
     volumes:
       - lab_home:/home/kasm-user
-      - lab_dind:/var/lib/docker   # sysbox requires this volume be exclusive to one container
+      - lab_dind:/var/lib/docker   # inner Docker storage: must not sit on the
+                                   # container's overlayfs (can't nest overlay)
 
 volumes:
   lab_home:
