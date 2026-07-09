@@ -19,7 +19,9 @@ services:
       - lab_home:/home/kasm-user
       - lab_dind:/var/lib/docker   # inner Docker storage: must not sit on the
                                    # container's overlayfs (can't nest overlay)
+      - lab_twingate:/etc/twingate # twingate auth/config survives redeploys
 
 volumes:
   lab_home:
   lab_dind:
+  lab_twingate:

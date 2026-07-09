@@ -36,6 +36,13 @@ check "docker group"        bash -c 'id -nG | grep -qw docker'
 check "wireshark group"     bash -c 'id -nG | grep -qw wireshark'
 check "custom_startup"      test -x /dockerstartup/custom_startup.sh
 
+# Twingate client (CLI -- no Linux GUI exists; desktop entry wraps the CLI)
+check "twingate installed"   rpm -q twingate
+check "twingate cli"         bash -c 'command -v twingate'
+check "twingated daemon"     bash -c 'command -v twingated'
+check "sudoers twingate"     bash -c 'sudo -n "$(command -v twingate)" --version'
+check "twingate helper"      test -x /usr/local/bin/twingate-desktop
+
 # Network automation toolchain
 check "containerlab"         containerlab version
 check "sudoers containerlab" sudo -n /usr/bin/containerlab version
@@ -103,8 +110,9 @@ check "desktop terminal"     test -x "$DESK/xfce4-terminal.desktop"
 check "desktop postman"      test -x "$DESK/postman.desktop"
 check "desktop wireshark"    test -x "$DESK/wireshark.desktop"
 check "desktop thunderbird"  test -x "$DESK/thunderbird.desktop"
-check "exactly 6 desktop icons" \
-    bash -c '[ "$(ls -1 /home/kasm-default-profile/Desktop/*.desktop 2>/dev/null | wc -l)" -eq 6 ]'
+check "desktop twingate"     test -x "$DESK/twingate.desktop"
+check "exactly 7 desktop icons" \
+    bash -c '[ "$(ls -1 /home/kasm-default-profile/Desktop/*.desktop 2>/dev/null | wc -l)" -eq 7 ]'
 
 # Launchers with an absolute Icon= path must point at a file that exists
 # (app tarballs move their icons between releases -- Postman has already)

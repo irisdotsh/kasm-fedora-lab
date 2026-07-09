@@ -88,6 +88,18 @@ RUN ver=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
     dnf clean all
 
 # ---------------------------------------------------------------------------
+# Twingate client (CLI + notifier -- Twingate ships no Linux GUI). Installed
+# via their documented script, which adds their rpm repo; its systemctl calls
+# may fail here (no systemd in Kasm containers), so tolerate script errors
+# and assert the package actually landed. The daemon is started by the
+# custom_startup hook below once `sudo twingate setup` has been run; config
+# in /etc/twingate is volume-persisted via compose.
+# ---------------------------------------------------------------------------
+RUN (curl -fsSL https://binaries.twingate.com/client/linux/install.sh | bash) || true && \
+    rpm -q twingate && \
+    dnf clean all
+
+# ---------------------------------------------------------------------------
 # Python network-automation stack in a venv (Fedora's system python is
 # PEP 668-managed, so no system-wide pip installs). PATH hook appends the
 # venv bin dir so the system python/pip stay first.
@@ -197,8 +209,10 @@ EOF
 # containerlab also needs root (netns wiring), so allow it too -- both the
 # full name and the `clab` symlink its package ships.
 # ---------------------------------------------------------------------------
+# Twingate paths are listed for both bin/sbin -- entries for a path that
+# doesn't exist are inert, and the smoke test pins down the real one.
 RUN usermod -aG docker,wireshark kasm-user && \
-    echo 'kasm-user ALL=(ALL) NOPASSWD: /usr/bin/dockerd, /usr/bin/containerlab, /usr/bin/clab' > /etc/sudoers.d/dockerd && \
+    echo 'kasm-user ALL=(ALL) NOPASSWD: /usr/bin/dockerd, /usr/bin/containerlab, /usr/bin/clab, /usr/bin/twingate, /usr/sbin/twingate, /usr/bin/twingated, /usr/sbin/twingated' > /etc/sudoers.d/dockerd && \
     chmod 0440 /etc/sudoers.d/dockerd
 
 # Fedora's stock sudo PAM stack includes system-auth (pam_sss), which fails
@@ -220,8 +234,50 @@ set -e
 if ! pgrep -x dockerd >/dev/null 2>&1; then
     sudo /usr/bin/dockerd >/tmp/dockerd.log 2>&1 &
 fi
+
+# Twingate: no systemd here, so start twingated ourselves -- but only once
+# the client has been configured (sudo twingate setup writes /etc/twingate).
+tgd=$(command -v twingated || true)
+if [ -n "$tgd" ] && [ -n "$(ls -A /etc/twingate 2>/dev/null)" ] && \
+   ! pgrep -x twingated >/dev/null 2>&1; then
+    sudo "$tgd" /etc/twingate >/tmp/twingated.log 2>&1 &
+fi
 EOF
 RUN chmod +x /dockerstartup/custom_startup.sh
+
+# ---------------------------------------------------------------------------
+# Twingate desktop entry point: opens a terminal that walks through setup on
+# first use (auth link opens in the browser), starts the daemon, and shows
+# status. This stands in for the GUI Twingate doesn't ship on Linux.
+# ---------------------------------------------------------------------------
+COPY <<'EOF' /usr/local/bin/twingate-desktop
+#!/usr/bin/env bash
+echo "=== Twingate ==="
+if [ -z "$(ls -A /etc/twingate 2>/dev/null)" ]; then
+    echo "Not configured yet -- running setup (open the auth link in Firefox):"
+    sudo twingate setup
+fi
+if ! pgrep -x twingated >/dev/null 2>&1; then
+    echo "Starting twingated..."
+    sudo "$(command -v twingated)" /etc/twingate >/tmp/twingated.log 2>&1 &
+    sleep 2
+fi
+twingate status 2>/dev/null || sudo twingate status || true
+echo
+echo "Useful: twingate status | twingate resources | sudo twingate setup"
+exec bash
+EOF
+RUN chmod +x /usr/local/bin/twingate-desktop
+
+COPY <<'EOF' /usr/share/applications/twingate.desktop
+[Desktop Entry]
+Type=Application
+Name=Twingate
+Exec=xfce4-terminal --title=Twingate -e /usr/local/bin/twingate-desktop
+Icon=network-vpn
+Terminal=false
+Categories=Network;
+EOF
 
 # ---------------------------------------------------------------------------
 # Theme: Greybird-dark GTK theme + matching Greybird-dark xfwm4 window
@@ -286,7 +342,7 @@ RUN chmod 700 /home/kasm-default-profile/.ssh && \
     chmod 600 /home/kasm-default-profile/.ssh/config
 
 # ---------------------------------------------------------------------------
-# Desktop icons: exactly the six we want. The base image drops one .desktop
+# Desktop icons: exactly the seven we want. The base image drops one .desktop
 # per app into ~/Desktop; wipe it and lay down only these, +x so XFCE treats
 # them as trusted launchers.
 # ---------------------------------------------------------------------------
@@ -297,6 +353,7 @@ RUN mkdir -p /home/kasm-default-profile/Desktop && \
     cp /usr/share/applications/xfce4-terminal.desktop              /home/kasm-default-profile/Desktop/xfce4-terminal.desktop && \
     cp /usr/share/applications/postman.desktop                     /home/kasm-default-profile/Desktop/postman.desktop && \
     cp /usr/share/applications/net.thunderbird.Thunderbird.desktop /home/kasm-default-profile/Desktop/thunderbird.desktop && \
+    cp /usr/share/applications/twingate.desktop                    /home/kasm-default-profile/Desktop/twingate.desktop && \
     find /usr/share/applications -iname '*wireshark*.desktop' -exec cp {} /home/kasm-default-profile/Desktop/wireshark.desktop \; && \
     chmod +x /home/kasm-default-profile/Desktop/*.desktop
 
